@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GrowEasy — CRM CSV Importer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  :root{
+    --ink:#12201c;
+    --paper:#f6f5f0;
+    --panel:#ffffff;
+    --line:#dcdad0;
+    --moss:#2f6b4f;
+    --moss-dark:#204a37;
+    --clay:#c7602f;
+    --muted:#6b7268;
+    --good:#2f6b4f;
+    --bad:#b3441f;
+    --warn:#a5791a;
+    --radius:10px;
+    font-family:'Iowan Old Style','Georgia',serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  header{
+    padding:28px 32px 20px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  header .brand{
+    font-family:'Iowan Old Style','Georgia',serif;
+    font-size:22px;
+    font-weight:700;
+    letter-spacing:.2px;
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+  }
+  header .brand small{
+    font-family:-apple-system,sans-serif;
+    font-size:12px;
+    font-weight:600;
+    color:var(--moss);
+    background:#e7f1ea;
+    padding:3px 8px;
+    border-radius:20px;
+    letter-spacing:.3px;
+  }
+  header p{margin:2px 0 0; color:var(--muted); font-size:13px;}
+
+  main{max-width:1100px; margin:0 auto; padding:32px 24px 80px;}
+
+  .steps{display:flex; gap:6px; margin-bottom:28px; flex-wrap:wrap;}
+  .step-pill{
+    font-size:12px; font-weight:600; padding:6px 12px; border-radius:20px;
+    border:1px solid var(--line); color:var(--muted); background:var(--panel);
+    display:flex; align-items:center; gap:6px;
+  }
+  .step-pill.active{border-color:var(--moss); color:var(--moss-dark); background:#e7f1ea;}
+  .step-pill.done{border-color:var(--moss); color:#fff; background:var(--moss);}
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:24px;
+    margin-bottom:24px;
+  }
+  .card h2{margin:0 0 4px; font-size:17px;}
+  .card .sub{color:var(--muted); font-size:13px; margin-bottom:18px;}
+
+  #dropzone{
+    border:2px dashed var(--line);
+    border-radius:var(--radius);
+    padding:48px 24px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s, background .15s;
+  }
+  #dropzone:hover, #dropzone.drag{
+    border-color:var(--moss);
+    background:#f2f7f4;
+  }
+  #dropzone .icon{font-size:32px; margin-bottom:10px;}
+  #dropzone .title{font-weight:600; font-size:15px;}
+  #dropzone .hint{color:var(--muted); font-size:13px; margin-top:4px;}
+  #fileInput{display:none;}
+
+  .file-chip{
+    display:inline-flex; align-items:center; gap:10px;
+    background:#f2f7f4; border:1px solid #cfe3d7; border-radius:8px;
+    padding:8px 14px; font-size:13px; margin-top:14px;
+  }
+  .file-chip button{
+    border:none; background:none; color:var(--bad); cursor:pointer; font-size:13px; font-weight:600;
+  }
+
+  .table-wrap{
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    max-height:420px;
+    overflow:auto;
+    position:relative;
+  }
+  table{border-collapse:collapse; width:100%; font-size:13px; white-space:nowrap;}
+  thead th{
+    position:sticky; top:0;
+    background:var(--moss-dark); color:#fff;
+    text-align:left; padding:10px 14px; font-weight:600;
+    z-index:2;
+  }
+  tbody td{padding:9px 14px; border-bottom:1px solid #eee;}
+  tbody tr:nth-child(even){background:#fafaf7;}
+  tbody tr:hover{background:#f2f7f4;}
+
+  .btn{
+    display:inline-flex; align-items:center; gap:8px;
+    background:var(--moss); color:#fff; border:none;
+    padding:11px 20px; border-radius:8px; font-size:14px; font-weight:600;
+    cursor:pointer; transition:background .15s;
+  }
+  .btn:hover{background:var(--moss-dark);}
+  .btn:disabled{background:#c9cec8; cursor:not-allowed;}
+  .btn.secondary{background:transparent; color:var(--moss-dark); border:1px solid var(--line);}
+  .btn.secondary:hover{background:#f2f7f4;}
+
+  .actions{display:flex; gap:10px; margin-top:18px; align-items:center;}
+
+  .stat-row{display:flex; gap:14px; flex-wrap:wrap; margin-bottom:18px;}
+  .stat{
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:16px 20px; min-width:140px;
+  }
+  .stat .num{font-size:26px; font-weight:700;}
+  .stat .label{font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px;}
+  .stat.good .num{color:var(--good);}
+  .stat.bad .num{color:var(--bad);}
+
+  .badge{
+    display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:700;
+  }
+  .badge.GOOD_LEAD_FOLLOW_UP{background:#e7f1ea; color:var(--good);}
+  .badge.SALE_DONE{background:#e2f0e8; color:#1c6b3c;}
+  .badge.DID_NOT_CONNECT{background:#fbf1dc; color:var(--warn);}
+  .badge.BAD_LEAD{background:#fbe6de; color:var(--bad);}
+  .badge.empty{background:#eee; color:#999;}
+
+  .loading{
+    display:flex; align-items:center; gap:12px; padding:18px;
+    color:var(--moss-dark); font-size:14px; font-weight:600;
+  }
+  .spinner{
+    width:18px; height:18px; border-radius:50%;
+    border:3px solid #cfe3d7; border-top-color:var(--moss);
+    animation:spin .8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  .error-box{
+    background:#fbe6de; border:1px solid #edb7a1; color:#7a2e12;
+    padding:14px 16px; border-radius:8px; font-size:13px; margin-top:14px;
+  }
+
+  footer{
+    text-align:center; padding:24px; color:var(--muted); font-size:12px;
+  }
+
+  @media (max-width:640px){
+    header{padding:20px 16px;}
+    main{padding:20px 12px 60px;}
+    .card{padding:16px;}
+    #dropzone{padding:32px 12px;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">GrowEasy <small>CRM Importer</small></div>
+  <p>Upload any lead CSV — AI maps it to your CRM schema automatically</p>
+</header>
+
+<main>
+
+  <div class="steps">
+    <div class="step-pill" id="pill-1">1 · Upload</div>
+    <div class="step-pill" id="pill-2">2 · Preview</div>
+    <div class="step-pill" id="pill-3">3 · Confirm</div>
+    <div class="step-pill" id="pill-4">4 · Result</div>
+  </div>
+
+  <!-- STEP 1: UPLOAD -->
+  <section class="card" id="uploadCard">
+    <h2>Step 1 — Upload your CSV</h2>
+    <p class="sub">Any layout works — Facebook Lead Ads, Google Ads, Excel exports, or a manual spreadsheet.</p>
+
+    <div id="dropzone">
+      <div class="icon">📄</div>
+      <div class="title">Drag & drop your CSV here</div>
+      <div class="hint">or click to browse — .csv files only</div>
+      <input type="file" id="fileInput" accept=".csv" />
+    </div>
+
+    <div id="fileChipHolder"></div>
+    <div id="uploadError"></div>
+  </section>
+
+  <!-- STEP 2: PREVIEW -->
+  <section class="card" id="previewCard" style="display:none;">
+    <h2>Step 2 — Preview uploaded data</h2>
+    <p class="sub" id="previewSub"></p>
+    <div class="table-wrap" id="previewTableWrap"></div>
+
+    <div class="actions">
+      <button class="btn" id="confirmBtn">Confirm & Run AI Import →</button>
+      <button class="btn secondary" id="cancelBtn">Choose a different file</button>
+    </div>
+  </section>
+
+  <!-- STEP 3: LOADING -->
+  <section class="card" id="loadingCard" style="display:none;">
+    <div class="loading"><div class="spinner"></div> <span id="loadingText">Sending records to AI for field mapping…</span></div>
+  </section>
+
+  <div id="resultError"></div>
+
+  <!-- STEP 4: RESULTS -->
+  <section id="resultsSection" style="display:none;">
+    <div class="card">
+      <h2>Step 4 — AI-mapped CRM records</h2>
+      <p class="sub">Review the imported and skipped records below.</p>
+
+      <div class="stat-row">
+        <div class="stat good"><div class="num" id="statImported">0</div><div class="label">Imported</div></div>
+        <div class="stat bad"><div class="num" id="statSkipped">0</div><div class="label">Skipped</div></div>
+        <div class="stat"><div class="num" id="statTotal">0</div><div class="label">Total Rows</div></div>
+      </div>
+
+      <div class="table-wrap" id="resultsTableWrap"></div>
+    </div>
+
+    <div class="card" id="skippedCard" style="display:none;">
+      <h2>Skipped records</h2>
+      <p class="sub">These rows had neither an email nor a mobile number, so they were excluded.</p>
+      <div class="table-wrap" id="skippedTableWrap"></div>
+    </div>
+
+    <div class="actions">
+      <button class="btn secondary" id="startOverBtn">Import another file</button>
+    </div>
+  </section>
+
+</main>
+
+<footer>Built for the GrowEasy Software Developer Assignment</footer>
+
+<script>
+const CRM_FIELDS = ["created_at","name","email","country_code","mobile_without_country_code",
+  "company","city","state","country","lead_owner","crm_status","crm_note","data_source",
+  "possession_time","description"];
+
+let selectedFile = null;
+let parsedRows = [];
+let parsedHeaders = [];
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const fileChipHolder = document.getElementById('fileChipHolder');
+const uploadError = document.getElementById('uploadError');
+const previewCard = document.getElementById('previewCard');
+const uploadCard = document.getElementById('uploadCard');
+const loadingCard = document.getElementById('loadingCard');
+const resultsSection = document.getElementById('resultsSection');
+const resultError = document.getElementById('resultError');
+
+function setActivePill(n){
+  for(let i=1;i<=4;i++){
+    const p = document.getElementById('pill-'+i);
+    p.classList.remove('active','done');
+    if(i < n) p.classList.add('done');
+    if(i === n) p.classList.add('active');
+  }
+}
+setActivePill(1);
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('drag');
+  if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e => {
+  if(e.target.files.length) handleFile(e.target.files[0]);
+});
+
+function handleFile(file){
+  uploadError.innerHTML = '';
+  if(!file.name.toLowerCase().endsWith('.csv')){
+    uploadError.innerHTML = '<div class="error-box">Please upload a .csv file.</div>';
+    return;
+  }
+  selectedFile = file;
+  fileChipHolder.innerHTML = `<div class="file-chip">📄 ${file.name} (${(file.size/1024).toFixed(1)} KB)
+    <button id="removeFileBtn">Remove</button></div>`;
+  document.getElementById('removeFileBtn').addEventListener('click', resetUpload);
+
+  Papa.parse(file, {
+    header: true,
+    skipEmptyLines: true,
+    complete: function(results){
+      parsedRows = results.data;
+      parsedHeaders = results.meta.fields || [];
+      showPreview();
+    },
+    error: function(err){
+      uploadError.innerHTML = `<div class="error-box">Could not parse file: ${err.message}</div>`;
+    }
+  });
+}
+
+function resetUpload(){
+  selectedFile = null; parsedRows = []; parsedHeaders = [];
+  fileChipHolder.innerHTML = '';
+  fileInput.value = '';
+  previewCard.style.display = 'none';
+  uploadCard.style.display = 'block';
+  setActivePill(1);
+}
+
+function escapeHtml(str){
+  return String(str ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function showPreview(){
+  document.getElementById('previewSub').textContent =
+    `Found ${parsedRows.length} rows and ${parsedHeaders.length} columns. No AI processing has happened yet.`;
+
+  let html = '<table><thead><tr>' + parsedHeaders.map(h => `<th>${escapeHtml(h)}</th>`).join('') + '</tr></thead><tbody>';
+  const previewRows = parsedRows.slice(0, 50);
+  for(const row of previewRows){
+    html += '<tr>' + parsedHeaders.map(h => `<td>${escapeHtml(row[h])}</td>`).join('') + '</tr>';
+  }
+  html += '</tbody></table>';
+  document.getElementById('previewTableWrap').innerHTML = html;
+
+  uploadCard.style.display = 'none';
+  previewCard.style.display = 'block';
+  setActivePill(2);
+}
+
+document.getElementById('cancelBtn').addEventListener('click', resetUpload);
+
+document.getElementById('confirmBtn').addEventListener('click', async () => {
+  if(!selectedFile) return;
+  resultError.innerHTML = '';
+  previewCard.style.display = 'none';
+  loadingCard.style.display = 'block';
+  setActivePill(3);
+
+  const formData = new FormData();
+  formData.append('file', selectedFile);
+
+  try{
+    const resp = await fetch('/api/import', { method: 'POST', body: formData });
+    const data = await resp.json();
+
+    if(!resp.ok){
+      throw new Error(data.error || 'Import failed.');
+    }
+
+    showResults(data);
+  }catch(err){
+    loadingCard.style.display = 'none';
+    previewCard.style.display = 'block';
+    setActivePill(2);
+    resultError.innerHTML = `<div class="error-box">${escapeHtml(err.message)}</div>`;
+  }
+});
+
+function statusBadge(val){
+  if(!val) return '<span class="badge empty">—</span>';
+  return `<span class="badge ${val}">${val.replaceAll('_',' ')}</span>`;
+}
+
+function showResults(data){
+  loadingCard.style.display = 'none';
+  resultsSection.style.display = 'block';
+  setActivePill(4);
+
+  document.getElementById('statImported').textContent = data.total_imported ?? data.records.length;
+  document.getElementById('statSkipped').textContent = data.total_skipped ?? (data.skipped ? data.skipped.length : 0);
+  document.getElementById('statTotal').textContent = data.total_input_rows ?? '—';
+
+  let html = '<table><thead><tr>' + CRM_FIELDS.map(f => `<th>${f}</th>`).join('') + '</tr></thead><tbody>';
+  for(const rec of data.records){
+    html += '<tr>' + CRM_FIELDS.map(f => {
+      if(f === 'crm_status') return `<td>${statusBadge(rec[f])}</td>`;
+      return `<td>${escapeHtml(rec[f])}</td>`;
+    }).join('') + '</tr>';
+  }
+  html += '</tbody></table>';
+  document.getElementById('resultsTableWrap').innerHTML = html;
+
+  const skippedCard = document.getElementById('skippedCard');
+  if(data.skipped && data.skipped.length){
+    skippedCard.style.display = 'block';
+    const rawKeys = Object.keys(data.skipped[0].raw || {});
+    let shtml = '<table><thead><tr>' + rawKeys.map(k => `<th>${escapeHtml(k)}</th>`).join('') + '<th>Reason</th></tr></thead><tbody>';
+    for(const s of data.skipped){
+      shtml += '<tr>' + rawKeys.map(k => `<td>${escapeHtml(s.raw ? s.raw[k] : '')}</td>`).join('') + `<td>${escapeHtml(s.reason||'')}</td></tr>`;
+    }
+    shtml += '</tbody></table>';
+    document.getElementById('skippedTableWrap').innerHTML = shtml;
+  } else {
+    skippedCard.style.display = 'none';
+  }
+}
+
+document.getElementById('startOverBtn').addEventListener('click', () => {
+  resultsSection.style.display = 'none';
+  resetUpload();
+});
+</script>
+
+</body>
+</html>
